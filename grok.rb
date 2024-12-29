@@ -88,7 +88,7 @@ module GrokIRB
       "You are an AI assistant providing Ruby/Rails code suggestions. " \
       "Environment: #{context}. " \
       "Important: Respond ONLY with code. No explanations. No markdown. No code block markers. " \
-      "No execution results or comments after #=>. Just the pure Ruby code."
+      "No execution results or comments after #=>. Just the pure 1-line Ruby or Rails code."
     end
   end
 end
