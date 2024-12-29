@@ -9,21 +9,22 @@ require 'readline'
 require 'httpx'
 require 'json'
 require 'rails/version' if defined?(Rails)
-require 'debug'
 
 module GrokIRB
-  GROK_API_KEY ||= ENV['GROK_API_KEY']
-  GROK_API_URL ||= 'https://api.x.ai/v1/chat/completions'
+  GROK_API_KEY = ENV['GROK_API_KEY']
+  GROK_API_URL = 'https://api.x.ai/v1/chat/completions'
   
   class Error < StandardError; end
   
   class << self
     def api_request(prompt)
       raise Error, "GROK_API_KEY not found in environment" unless GROK_API_KEY
+      
       httpx = HTTPX.with(headers: {
         'Content-Type' => 'application/json',
         'Authorization' => "Bearer #{GROK_API_KEY}"
       })
+      
       response = httpx.post(
         GROK_API_URL,
         json: {
@@ -35,6 +36,7 @@ module GrokIRB
         },
         timeout: { operation_timeout: 30 }
       )
+      
       handle_response(response)
     rescue HTTPX::Error => e
       puts "Network error: #{e.message}"
@@ -56,31 +58,44 @@ module GrokIRB
       end
 
       parsed = JSON.parse(response.body)
-      parsed.dig('choices', 0, 'message', 'content')
+      content = parsed.dig('choices', 0, 'message', 'content').to_s
+
+      # Extract and clean code
+      code = if content.include?('```')
+        content.split('```').find { |block| block.strip.start_with?('ruby') }&.strip&.sub(/^ruby\n/, '') ||
+        content.split('```')[1]&.strip
+      else
+        content.strip
+      end
+
+      # Clean the code
+      code&.lines&.map { |line| line.split('#=>').first.rstrip }&.join("\n")&.strip
     end
 
     def system_prompt
       context = if defined?(Rails)
-        "Rails v#{Rails::VERSION::STRING}. " \
-        "Gems: #{Bundler.load.specs.map(&:name).join(', ')}. "
+        gems = begin
+          Bundler.load.specs.map(&:name).sort.join(', ')
+        rescue LoadError, StandardError => e
+          "bundler not accessible"
+        end
+        
+        "Rails v#{Rails::VERSION::STRING}. Gems: #{gems}"
       else
         "Standard Ruby environment"
       end
 
       "You are an AI assistant providing Ruby/Rails code suggestions. " \
       "Environment: #{context}. " \
-      "Provide concise, practical code examples that can be directly used in IRB."
+      "Important: Respond ONLY with code. No explanations. No markdown. No code block markers. " \
+      "No execution results or comments after #=>. Just the pure Ruby code."
     end
   end
 end
 
 # Define global grok method for easy access
 def grok(prompt)
-  result = GrokIRB.api_request(prompt)
-  if result
-    puts "\n=== Grok Suggestion ===\n\n#{result}\n\n"
-  end
-  nil # Prevent result from showing in IRB
+  GrokIRB.api_request(prompt)
 end
 
-puts "Grok integration loaded! Use grok 'your prompt' to get suggestions."
+puts "Grok integration loaded! Use grok 'your prompt' to get code suggestions."
