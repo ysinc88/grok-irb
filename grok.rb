@@ -95,7 +95,7 @@ end
 
 # Define global grok method for easy access
 def grok(prompt)
-  GrokIRB.api_request(prompt)
+  puts GrokIRB.api_request(prompt)
 end
 
 puts "Grok integration loaded! Use grok 'your prompt' to get code suggestions."
